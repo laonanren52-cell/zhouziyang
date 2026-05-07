@@ -1,3 +1,4 @@
+import html
 import time
 from io import BytesIO
 
@@ -107,6 +108,76 @@ def load_design_file(uploaded_file) -> pd.DataFrame:
             return pd.read_csv(BytesIO(raw), encoding="gbk")
 
     return pd.read_excel(uploaded_file)
+
+
+# =============================
+# 报告导出：生成 Word 可打开的 HTML 文档
+# =============================
+def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
+    """
+    生成可下载的 .doc 文件内容。
+    为保持 Demo 极简，不引入 python-docx；Word/WPS 可直接打开 HTML 格式的 .doc 文件。
+    """
+    preview_table = data.head(5).to_html(index=False, escape=True, border=0)
+    escaped_report = html.escape(report_text)
+
+    document = f"""
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>5G通信基建数智化交付报告</title>
+    <style>
+        body {{
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            color: #1f2937;
+            line-height: 1.6;
+        }}
+        h1 {{
+            font-size: 22px;
+            border-bottom: 2px solid #16a34a;
+            padding-bottom: 8px;
+        }}
+        .meta {{
+            color: #4b5563;
+            margin-bottom: 16px;
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0 18px;
+        }}
+        th, td {{
+            border: 1px solid #d1d5db;
+            padding: 6px 8px;
+            font-size: 12px;
+        }}
+        th {{
+            background: #f3f4f6;
+        }}
+        pre {{
+            white-space: pre-wrap;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            font-size: 13px;
+        }}
+    </style>
+</head>
+<body>
+    <h1>5G通信基建数智化交付报告</h1>
+    <div class="meta">生成模式：{html.escape(mode)} | 数据记录数：{len(data)}</div>
+    <h2>原始数据预览</h2>
+    {preview_table}
+    <h2>智能转化结果</h2>
+    <pre>{escaped_report}</pre>
+</body>
+</html>
+"""
+    return document.encode("utf-8")
+
+
+def show_download_toast() -> None:
+    """下载按钮点击后的轻量反馈。"""
+    st.toast("下载成功", icon="✅")
 
 
 # =============================
@@ -289,8 +360,15 @@ if st.session_state.ai_result:
     with st.container(border=True):
         st.markdown(st.session_state.ai_result)
 
-    if st.button("一键下载转化报告 (Word/PDF)", use_container_width=True):
-        st.toast("下载成功", icon="✅")
+    report_bytes = build_word_report(st.session_state.ai_result, df, mode)
+    st.download_button(
+        "一键下载转化报告 (Word)",
+        data=report_bytes,
+        file_name="5G通信基建数智化交付报告.doc",
+        mime="application/msword",
+        use_container_width=True,
+        on_click=show_download_toast,
+    )
 else:
     st.info("请在左侧配置生成模式后，点击“启动数智化指令转化”。")
 
