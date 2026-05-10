@@ -1,7 +1,9 @@
 import html
 import json
 import os
+import socket
 import time
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from urllib import error, request
 
@@ -10,6 +12,8 @@ import streamlit as st
 
 
 REQUIRED_COLUMNS = ["站点编号", "站点类型", "AAU型号", "BBU型号", "线缆敷设距离", "取电方式"]
+DEFAULT_API_TIMEOUT = 180
+DEFAULT_SAMPLE_ROWS = 30
 
 
 # =============================
@@ -75,6 +79,33 @@ st.markdown(
         background-color: #15803d;
         border-color: #15803d;
         color: #ffffff;
+    }
+    .report-hint {
+        border-left: 4px solid #16a34a;
+        background: #f0fdf4;
+        color: #14532d;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin: 10px 0 18px;
+        font-size: 14px;
+    }
+    .phase-box {
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 14px 16px;
+        margin: 10px 0;
+    }
+    .phase-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 14px;
+        color: #334155;
+    }
+    .phase-percent {
+        color: #16a34a;
+        font-weight: 700;
     }
     </style>
     """,
@@ -176,6 +207,48 @@ def join_unique(data: pd.DataFrame, column: str) -> str:
     return "、".join(data[column].dropna().astype(str).unique())
 
 
+def value_counts_dict(data: pd.DataFrame, column: str, limit: int = 12) -> dict[str, int]:
+    """返回适合放入 LLM 上下文的字段分布。"""
+    if column not in data.columns:
+        return {}
+    counts = data[column].fillna("未填写").astype(str).value_counts().head(limit)
+    return {str(key): int(value) for key, value in counts.items()}
+
+
+def build_engineering_summary(data: pd.DataFrame, sample_rows: int) -> dict:
+    """将大型设计表压缩为工程摘要，避免把整表塞给大模型导致超时。"""
+    bom = estimate_bom(data)
+    cable_distance = pd.to_numeric(data.get("线缆敷设距离", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    sample_columns = [column for column in REQUIRED_COLUMNS if column in data.columns]
+    long_distance_sites = []
+
+    if "站点编号" in data.columns and "线缆敷设距离" in data.columns:
+        top_rows = data.assign(线缆敷设距离=cable_distance).nlargest(min(10, len(data)), "线缆敷设距离")
+        long_distance_sites = top_rows[["站点编号", "站点类型", "线缆敷设距离"]].to_dict("records")
+
+    return {
+        "record_count": int(len(data)),
+        "bom_estimate": bom,
+        "site_type_distribution": value_counts_dict(data, "站点类型"),
+        "aau_model_distribution": value_counts_dict(data, "AAU型号"),
+        "bbu_model_distribution": value_counts_dict(data, "BBU型号"),
+        "power_source_distribution": value_counts_dict(data, "取电方式"),
+        "cable_distance": {
+            "total_m": int(cable_distance.sum()),
+            "max_m": int(cable_distance.max()) if len(cable_distance) else 0,
+            "avg_m": round(float(cable_distance.mean()), 2) if len(cable_distance) else 0,
+            "long_distance_sites": long_distance_sites,
+        },
+        "sample_rows": data[sample_columns].head(sample_rows).to_dict("records") if sample_columns else [],
+    }
+
+
+def build_llm_context(data: pd.DataFrame, sample_rows: int) -> str:
+    """生成面向外接 API 的紧凑上下文。"""
+    summary = build_engineering_summary(data, sample_rows)
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
 # =============================
 # 报告导出：生成 Word 可打开的 HTML 文档
 # =============================
@@ -246,6 +319,22 @@ def show_download_toast() -> None:
     st.toast("下载成功", icon="✅")
 
 
+def render_phase(placeholder, percent: int, title: str, detail: str) -> None:
+    """渲染数字化处理阶段。"""
+    placeholder.markdown(
+        f"""
+        <div class="phase-box">
+            <div class="phase-line">
+                <strong>{html.escape(title)}</strong>
+                <span class="phase-percent">{percent}%</span>
+            </div>
+            <div style="margin-top: 6px; color: #64748b; font-size: 13px;">{html.escape(detail)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # =============================
 # Mock LLM：模拟大模型生成专业施工文档
 # =============================
@@ -258,16 +347,38 @@ def mock_llm_response(data: pd.DataFrame, mode: str) -> str:
     site_types = join_unique(data, "站点类型")
     aau_models = join_unique(data, "AAU型号")
     bbu_models = join_unique(data, "BBU型号")
+    power_sources = join_unique(data, "取电方式")
+    avg_cable = round(bom["cable_total"] / bom["site_count"], 1) if bom["site_count"] else 0
+    terminal_lugs = bom["site_count"] * 10
+    firestop_kits = bom["site_count"] * 4
+    cable_ties = max(100, bom["cable_total"] * 2)
+    long_route_note = "存在长距离放缆场景，建议增加中间牵引点、复核桥架余量并预留光功率测试窗口。" if avg_cable >= 80 else "线缆平均路由较短，重点控制端口防水、标签一致性和现场余量管理。"
+    power_note = "涉及弱电井或路灯杆取电时，需提前确认产权边界、计量方式、空开容量和接地条件。" if any(keyword in power_sources for keyword in ["弱电井", "路灯", "交流配电箱"]) else "以市电直供为主，需重点复核进线空开容量、接地排余量和停送电审批。"
 
-    bom_block = f"""
+    overview_block = f"""
 ## 5G通信基建数智化交付指令报告
 
+**文档性质：** Demo 版自动生成交付建议，适用于施工准备、物料核对和现场技术交底  
 **生成模式：** {mode}  
 **站点数量：** {bom["site_count"]} 个  
 **站点类型：** {site_types or "未识别"}  
 **设备型号：** AAU：{aau_models or "未识别"}；BBU：{bbu_models or "未识别"}  
+**取电方式：** {power_sources or "未识别"}  
+**线缆路由：** 合计约 {bom["cable_total"]} 米，平均约 {avg_cable} 米/站  
 
-### 一、BOM 物料统计清单
+### 一、工程概况与规则引擎结论
+
+| 项目 | 结论 |
+|---|---|
+| 交付范围 | AAU/BBU 安装、前传光缆、电源接入、接地、防水封堵、基础联调 |
+| 规则口径 | 线缆敷设距离按设计表汇总，电源线与光缆按站点预留工艺余量估算 |
+| 重点风险 | 电力交越安全净距、楼面临边高处作业、弱电井/路灯杆取电边界、端口防水 |
+| 现场建议 | {long_route_note} |
+| 取电建议 | {power_note} |
+"""
+
+    bom_block = f"""
+### 二、BOM 物料统计清单
 
 | 序号 | 物料名称 | 推荐规格 | 估算数量 | 施工用途 |
 |---:|---|---|---:|---|
@@ -277,68 +388,107 @@ def mock_llm_response(data: pd.DataFrame, mode: str) -> str:
 | 4 | 线缆标识牌 | 防水阻燃型 | {bom["labels"]} 个 | 电源线、光缆、尾纤双端标识 |
 | 5 | 镀锌桥架/线槽 | 100x50mm | {bom["cable_tray"]} 米 | 楼面及弱电井线缆保护 |
 | 6 | 防水胶泥与热缩套管 | 室外耐候型 | {bom["waterproof_kits"]} 套 | 馈线窗、穿墙孔洞封堵 |
+| 7 | 铜鼻子/冷压端子 | 与电源线线径匹配 | {terminal_lugs} 个 | 电源线端接压接 |
+| 8 | 防火封堵材料 | 阻燃泥/防火包 | {firestop_kits} 套 | 竖井、穿墙、机房孔洞封堵 |
+| 9 | 尼龙扎带/不锈钢扎带 | 室外耐候型 | {cable_ties} 根 | 线缆绑扎与路由整理 |
+
+**物料复核要求：**
+
+- 到货后按站点编号分包核对，重点核对 AAU/BBU 型号、光模块、尾纤规格和电源线线径。
+- 电源类材料应提供阻燃等级、合格证和批次记录；室外材料需满足耐候、防水和抗紫外要求。
+- 现场若发生路由变更，应同步更新线缆长度、桥架数量、标签数量和竣工图。
 """
 
     guide_block = f"""
-### 二、工序指导书
+### 三、工序指导书
 
 1. **进场复核**
    - 依据站点编号逐站核对设计图、设备型号、取电方式和路由长度。
-   - 对楼面站、宏站需复测 AAU 挂高、抱杆垂直度及安装朝向，偏差超限时应回传设计复核。
+   - 对楼面站、宏站需复测 AAU 挂高、抱杆垂直度、安装朝向、方位角和机械下倾角。
+   - 对室分站需核对弱电井、走线架、机柜位置、传输资源和供电空开容量。
 
 2. **设备安装**
    - AAU 采用双螺母防松固定，安装完成后检查方位角、下倾角和端口防水帽。
-   - BBU 上架前应确认机柜承重、空开容量、接地排余量和传输尾纤路由。
+   - BBU 上架前应确认机柜承重、空开容量、接地排余量、传输尾纤路由和散热空间。
+   - 室外设备安装后需完成螺栓复紧、端口防水、铭牌拍照和安装位置复核。
 
 3. **线缆敷设**
    - 本批次设计线缆敷设距离合计约 **{bom["cable_total"]} 米**，施工放缆应预留 3% 至 5% 工艺余量。
    - 电源线、光缆应分槽或分层敷设；无法分离时须增加阻燃隔板并做好交越标识。
    - 线缆转弯半径不得小于线缆外径的 10 倍，桥架内线缆填充率建议不超过 40%。
+   - 光缆两端应挂永久性标签，标签内容应包含站点编号、起止端口、方向和施工日期。
 
-4. **上电与联调**
-   - 上电前测量输入电压、接地电阻和空开容量，确认无短路、反接和松动端子。
+4. **供电与接地**
+   - 上电前测量输入电压、接地电阻和空开容量，确认无短路、反接、虚接和松动端子。
+   - 电源线端接必须压接牢固，线鼻子规格与线径匹配，端子处不得露铜。
+   - 所有设备保护地应接入站点接地排，接地点除锈后做防腐处理。
+
+5. **开通联调**
    - 设备启动后检查 BBU-AAU 光链路、GPS/北斗同步、网管告警和小区激活状态。
+   - 光链路需记录收发光功率，异常时优先排查尾纤极性、光模块规格、端口配置和弯折半径。
+   - 联调完成后导出网管无告警截图、基础参数截图和测试记录。
 
-### 三、安全注意事项
+### 四、安全注意事项
 
 - 电力线与通信线交越时应保持安全净距，平行敷设距离不足时需采取隔离保护措施。
 - 与强电管线交越的部位需设置明显警示标识，电力交越距离必须大于设计与现行规范规定值。
 - 高处作业必须执行安全带高挂低用，楼面临边、洞口和爬梯区域需先防护后施工。
 - 室外穿墙孔、馈线窗和设备端口应完成防水封堵，防止雨水倒灌造成设备故障。
 - 所有接地点必须除锈、压接牢固并做防腐处理，接地电阻应满足站点验收要求。
+- 涉及停送电、配电箱开盖、弱电井作业和夜间施工时，必须执行审批、监护和复核制度。
 
-### 四、交付验收要点
+### 五、质量验收与交付资料
 
-- 上传竣工照片：设备全景、铭牌、线缆路由、接地端子、空开标签和防水封堵点。
-- 提交测试记录：光功率、驻波/链路状态、接地电阻、上电电压和网管无告警截图。
-- 物料余量、设计变更和现场偏差需在交付单中闭环记录。
+| 验收项 | 交付要求 |
+|---|---|
+| 设备安装 | 设备位置、朝向、挂高、紧固、防水、铭牌照片齐全 |
+| 线缆工艺 | 路由整齐、绑扎间距一致、转弯半径合规、标签双端一致 |
+| 电源接入 | 空开容量、输入电压、端子压接、线缆颜色和极性复核通过 |
+| 接地系统 | 接地线规格、接地点防腐、接地电阻测试记录齐全 |
+| 光链路 | 收发光功率、端口对应关系、链路状态截图齐全 |
+| 资料闭环 | 竣工图、变更记录、测试记录、隐蔽工程照片和问题整改记录归档 |
+
+### 六、风险闭环建议
+
+- 对线缆路由超过平均值较多的站点，建议施工前二次踏勘，确认桥架、竖井和穿墙孔容量。
+- 对取电方式存在产权或计量边界的站点，建议先完成业主确认和停送电审批，再安排设备上电。
+- 对楼面站和宏站，建议把临边防护、吊装路径、天气条件和人员资质作为开工前检查项。
+- 对室分站，建议重点核查弱电井空间、消防封堵恢复和物业施工窗口。
 """
 
     if mode == "生成BOM清单":
-        return bom_block
+        return overview_block + "\n" + bom_block
     if mode == "生成工艺指导书":
-        return "## 5G通信基建数智化交付指令报告\n\n" + guide_block
-    return bom_block + "\n" + guide_block
+        return overview_block + "\n" + guide_block
+    return overview_block + "\n" + bom_block + "\n" + guide_block
 
 
-def call_llm_api(data: pd.DataFrame, mode: str, api_url: str, model: str, api_key: str) -> str:
+def call_llm_api(
+    data: pd.DataFrame,
+    mode: str,
+    api_url: str,
+    model: str,
+    api_key: str,
+    timeout_seconds: int,
+    sample_rows: int,
+) -> str:
     """调用 OpenAI 兼容的 Chat Completions 接口生成交付文档。"""
-    bom = estimate_bom(data)
-    preview_csv = data.head(20).to_csv(index=False)
+    llm_context = build_llm_context(data, sample_rows)
     prompt = f"""
-你是一名通信基建工程交付专家。请基于下方站点设计元数据和规则引擎估算结果，生成一份专业、可交付的中文施工文档。
+你是一名通信基建工程交付专家。请基于下方工程摘要，生成一份专业、可交付的中文施工文档。
 
 生成模式：{mode}
-规则引擎估算结果：{json.dumps(bom, ensure_ascii=False)}
 
-站点设计元数据 CSV：
-{preview_csv}
+工程摘要 JSON：
+{llm_context}
 
 输出要求：
 1. 使用 Markdown。
-2. 必须包含标题、BOM 物料统计表、安全注意事项和交付验收要点。
-3. 语言要像真实通信施工交付文件，避免营销化表达。
-4. 如涉及电力线与通信线交越，必须提示安全净距和隔离保护。
+2. 必须包含工程概况、BOM 物料统计表、工序指导书、安全注意事项、质量验收标准、风险闭环建议。
+3. BOM 数量必须优先采用工程摘要 JSON 中的 bom_estimate，不要自行改写数量。
+4. 语言要像真实通信施工交付文件，避免营销化表达。
+5. 如涉及电力线与通信线交越，必须提示安全净距、隔离保护、警示标识和复核记录。
+6. 对大路由、弱电井取电、楼面站/宏站高处作业、端口防水分别给出具体执行建议。
 """
     payload = {
         "model": model,
@@ -360,14 +510,22 @@ def call_llm_api(data: pd.DataFrame, mode: str, api_url: str, model: str, api_ke
     )
 
     try:
-        with request.urlopen(api_request, timeout=60) as response:
+        with request.urlopen(api_request, timeout=timeout_seconds) as response:
             response_data = json.loads(response.read().decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError("大模型 API 返回内容不是有效 JSON。") from exc
+    except (TimeoutError, socket.timeout) as exc:
+        raise RuntimeError(
+            f"大模型 API 在 {timeout_seconds} 秒内未返回结果。建议提高超时时间、减少样本行数，或切换为本地 Mock 先生成交付初稿。"
+        ) from exc
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
         raise RuntimeError(f"大模型 API 返回错误：HTTP {exc.code} {detail[:300]}") from exc
     except error.URLError as exc:
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            raise RuntimeError(
+                f"大模型 API 在 {timeout_seconds} 秒内未返回结果。建议提高超时时间、减少样本行数，或切换为本地 Mock 先生成交付初稿。"
+            ) from exc
         raise RuntimeError(f"无法连接大模型 API：{exc.reason}") from exc
 
     try:
@@ -414,6 +572,27 @@ with st.sidebar:
             "API Key",
             value=os.getenv("LLM_API_KEY", ""),
             type="password",
+        )
+        api_timeout = st.number_input(
+            "API超时时间（秒）",
+            min_value=30,
+            max_value=600,
+            value=int(os.getenv("LLM_TIMEOUT", DEFAULT_API_TIMEOUT)),
+            step=30,
+            help="大型工程文件建议设置为 180-300 秒。",
+        )
+        sample_rows = st.number_input(
+            "送入模型的样本行数",
+            min_value=5,
+            max_value=200,
+            value=int(os.getenv("LLM_SAMPLE_ROWS", DEFAULT_SAMPLE_ROWS)),
+            step=5,
+            help="系统会把全量数据压缩为工程摘要，只附带少量样本行给模型参考。",
+        )
+        fallback_to_mock = st.checkbox(
+            "API失败时自动生成本地工程报告",
+            value=True,
+            help="开启后，API 超时或网络异常时不会中断流程，会自动使用规则引擎生成交付报告。",
         )
 
     start_button = st.button(
@@ -463,6 +642,16 @@ elif validation_warnings:
 else:
     st.success("数据结构校验通过，可用于生成交付指令。")
 
+if llm_engine.startswith("真实") and len(work_df) > sample_rows:
+    st.markdown(
+        f"""
+        <div class="report-hint">
+            大文件处理策略：当前共有 {len(work_df)} 行记录，系统会先生成全量工程摘要，再仅附带 {sample_rows} 行样本给外接 API，降低超时和上下文溢出风险。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 st.markdown(
     f"""
     <div class="metric-strip">
@@ -501,22 +690,80 @@ if start_button:
         st.error("真实大模型 API 模式需要填写 API 地址、模型名称和 API Key。")
         st.stop()
 
-    progress = st.progress(0, text="正在调用规则引擎与AI模型校验安全规范...")
+    progress = st.progress(0, text="0% 准备启动数智化转化任务")
+    phase_placeholder = st.empty()
 
-    # 模拟 2-3 秒处理过程，呈现真实系统的任务执行反馈。
-    for value in range(0, 101, 10):
-        time.sleep(0.22)
-        progress.progress(value, text="正在调用规则引擎与AI模型校验安全规范...")
+    render_phase(phase_placeholder, 15, "数据结构校验", "正在核对必填字段、线缆距离和站点记录完整性。")
+    progress.progress(15, text="15% 数据结构校验完成")
+    time.sleep(0.25)
+
+    bom_preview = estimate_bom(work_df)
+    render_phase(
+        phase_placeholder,
+        35,
+        "规则引擎估算",
+        f"已完成 {bom_preview['site_count']} 个站点、{bom_preview['cable_total']} 米线缆的物料规则估算。",
+    )
+    progress.progress(35, text="35% 规则引擎完成 BOM 估算")
+    time.sleep(0.25)
+
+    render_phase(phase_placeholder, 55, "AI上下文压缩", "正在把大型工程表压缩为站点分布、设备分布、取电方式、长路由风险和样本行。")
+    progress.progress(55, text="55% 工程摘要已生成，准备调用 AI 引擎")
+    time.sleep(0.25)
 
     if llm_engine.startswith("真实"):
-        try:
-            st.session_state.ai_result = call_llm_api(work_df, mode, api_url, model_name, api_key)
-        except RuntimeError as exc:
-            st.warning(f"{exc} 已自动切回本地 Mock 结果，便于继续演示。")
-            st.session_state.ai_result = mock_llm_response(work_df, mode)
+        render_phase(
+            phase_placeholder,
+            60,
+            "AI生成中",
+            f"正在等待外接 API 返回，最长等待 {api_timeout} 秒。大文件已按摘要+{sample_rows}行样本送入模型。",
+        )
+        progress.progress(60, text=f"60% AI生成中，已等待 0 秒 / {api_timeout} 秒")
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                call_llm_api,
+                work_df,
+                mode,
+                api_url,
+                model_name,
+                api_key,
+                int(api_timeout),
+                int(sample_rows),
+            )
+            start_time = time.time()
+            while not future.done():
+                elapsed = int(time.time() - start_time)
+                percent = min(94, 60 + int((elapsed / max(int(api_timeout), 1)) * 34))
+                render_phase(
+                    phase_placeholder,
+                    percent,
+                    "AI生成中",
+                    f"外接 API 正在处理工程摘要，已等待 {elapsed} 秒 / {api_timeout} 秒。页面仍在运行，请勿重复点击。",
+                )
+                progress.progress(percent, text=f"{percent}% AI生成中，已等待 {elapsed} 秒 / {api_timeout} 秒")
+                time.sleep(0.5)
+
+            try:
+                st.session_state.ai_result = future.result()
+            except Exception as exc:
+                if fallback_to_mock:
+                    st.warning(f"{exc} 已自动切回本地规则引擎报告，避免本次任务中断。")
+                    st.session_state.ai_result = mock_llm_response(work_df, mode)
+                else:
+                    st.error(str(exc))
+                    render_phase(phase_placeholder, 100, "任务中断", "外接 API 未在预期时间内返回，已停止生成。")
+                    progress.progress(100, text="100% 任务中断")
+                    st.stop()
     else:
+        for percent in (70, 82, 94):
+            render_phase(phase_placeholder, percent, "本地报告生成", "正在根据规则引擎结果生成工程交付指令报告。")
+            progress.progress(percent, text=f"{percent}% 本地工程报告生成中")
+            time.sleep(0.25)
         st.session_state.ai_result = mock_llm_response(work_df, mode)
 
+    render_phase(phase_placeholder, 100, "报告封装完成", "已完成报告正文生成，可在下方预览并下载 Word 文件。")
+    progress.progress(100, text="100% 数智化指令转化完成")
     st.success("数智化指令转化完成")
 
 if st.session_state.ai_result:

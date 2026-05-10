@@ -11,3 +11,4 @@ __pycache__/
 *.zip
 .streamlit/secrets.toml
 local-demo-server.js
+publish-local/
