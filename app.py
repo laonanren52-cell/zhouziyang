@@ -1,4 +1,4 @@
-import html
+﻿import html
 import json
 import os
 import socket
@@ -21,7 +21,7 @@ DEFAULT_SAMPLE_ROWS = 30
 # =============================
 st.set_page_config(
     page_title="5G通信基建数智化交付系统",
-    page_icon="📡",
+    page_icon="5G",
     layout="wide",
 )
 
@@ -57,7 +57,7 @@ st.markdown(
     }
     .block-container {
         max-width: 1240px;
-        padding-top: 28px;
+        padding-top: 44px;
         padding-bottom: 48px;
     }
     section[data-testid="stSidebar"] {
@@ -317,6 +317,307 @@ st.markdown(
         border-color: #e5e7eb;
         box-shadow: 0 1px 3px rgba(17, 24, 39, 0.035);
     }
+    .report-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 6px 0 16px;
+    }
+    .report-module {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 15px 16px;
+        box-shadow: 0 1px 3px rgba(17, 24, 39, 0.035);
+    }
+    .report-module-label {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 7px;
+    }
+    .report-module-value {
+        color: #111827;
+        font-size: 20px;
+        line-height: 1.25;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+    .report-module-note {
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.45;
+        margin-top: 7px;
+    }
+    .acceptance-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 6px 0 16px;
+    }
+    .acceptance-item {
+        border: 1px solid #e5e7eb;
+        border-left: 3px solid #0f766e;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 13px 14px;
+    }
+    .acceptance-title {
+        color: #111827;
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 5px;
+    }
+    .acceptance-copy {
+        color: #475569;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .section-divider {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+        margin: 4px 0 10px;
+    }
+    .taste-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(16px);
+        border-radius: 999px;
+        padding: 13px 18px 13px 20px;
+        margin: 6px auto 22px;
+        min-height: 52px;
+        line-height: 1.4;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+    }
+    .taste-nav-brand {
+        color: #0f172a;
+        font-size: 13px;
+        font-weight: 850;
+        letter-spacing: 0;
+        line-height: 1.45;
+    }
+    .taste-nav-links {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 18px;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 750;
+        line-height: 1.45;
+    }
+    .taste-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 14px;
+        min-height: 430px;
+        padding: 58px 46px 34px;
+        margin-bottom: 18px;
+        color: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background:
+            radial-gradient(circle at 18% 18%, rgba(15, 118, 110, 0.36), transparent 32%),
+            radial-gradient(circle at 82% 68%, rgba(37, 99, 235, 0.26), transparent 30%),
+            linear-gradient(135deg, #111827 0%, #172033 48%, #0f2f2c 100%);
+        background-size: cover;
+        background-position: center;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+    }
+    .taste-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(180deg, rgba(0,0,0,0.45), transparent 80%);
+    }
+    .taste-hero-inner {
+        position: relative;
+        z-index: 1;
+        max-width: 1040px;
+        margin: 0 auto;
+        text-align: center;
+    }
+    .product-lockup {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        margin: 0 auto 24px;
+        color: rgba(255,255,255,0.92);
+    }
+    .product-lockup-main {
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+    }
+    .product-lockup-line {
+        width: 92px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+    }
+    .taste-hero-title {
+        color: #ffffff;
+        font-size: clamp(42px, 5.2vw, 74px);
+        line-height: 1.04;
+        font-weight: 900;
+        letter-spacing: 0;
+        margin: 0 auto 18px;
+        max-width: 980px;
+        text-wrap: balance;
+    }
+    .taste-hero-copy {
+        display: block;
+        max-width: 820px;
+        margin: 0 auto;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 16px;
+        line-height: 1.75;
+        text-align: center !important;
+        text-wrap: balance;
+    }
+    .hero-action-row {
+        max-width: 540px;
+        margin: 18px auto 34px;
+        position: relative;
+        z-index: 2;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .hero-action-row div.stButton > button {
+        border-radius: 999px;
+        min-height: 44px;
+        font-weight: 850;
+    }
+    .status-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 0 0 24px;
+    }
+    .status-cell {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 13px 14px;
+        box-shadow: 0 1px 3px rgba(17, 24, 39, 0.035);
+    }
+    .status-cell span {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+    }
+    .status-cell strong {
+        color: #111827;
+        font-size: 14px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+    .bento-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-auto-flow: dense;
+        gap: 12px;
+        margin: 8px 0 26px;
+    }
+    .bento-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        min-height: 156px;
+        background: #ffffff;
+        padding: 18px;
+        box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04);
+        transition: transform 700ms ease, box-shadow 700ms ease;
+    }
+    .bento-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.10);
+    }
+    .bento-large { grid-column: span 2; grid-row: span 2; min-height: 324px; }
+    .bento-wide { grid-column: span 2; }
+    .bento-dark {
+        color: #ffffff;
+        background:
+            radial-gradient(circle at 12% 16%, rgba(20, 184, 166, 0.30), transparent 34%),
+            radial-gradient(circle at 86% 68%, rgba(148, 163, 184, 0.20), transparent 30%),
+            linear-gradient(145deg, #111827 0%, #1f2937 58%, #0f766e 140%);
+    }
+    .bento-kicker {
+        color: #2563eb;
+        font-size: 11px;
+        font-weight: 900;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+    .bento-dark .bento-kicker { color: #99f6e4; }
+    .bento-title {
+        color: inherit;
+        font-size: 22px;
+        line-height: 1.12;
+        font-weight: 900;
+        max-width: 360px;
+    }
+    .bento-copy {
+        color: #64748b;
+        font-size: 13px;
+        line-height: 1.65;
+        margin-top: 12px;
+        max-width: 420px;
+    }
+    .bento-dark .bento-copy { color: rgba(255,255,255,0.74); }
+    .bento-number {
+        position: absolute;
+        right: 16px;
+        bottom: 12px;
+        color: rgba(15, 23, 42, 0.08);
+        font-size: 56px;
+        line-height: 1;
+        font-weight: 950;
+    }
+    .result-stage {
+        border: 1px solid #dbe3ea;
+        border-radius: 16px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.94), rgba(248,250,252,0.96)),
+            radial-gradient(circle at 12% 8%, rgba(15,118,110,0.10), transparent 32%);
+        padding: 18px;
+        box-shadow: 0 20px 42px rgba(15, 23, 42, 0.07);
+    }
+    .download-band {
+        border: 1px solid #dbe3ea;
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 16px;
+        margin-top: 14px;
+        box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04);
+    }
+    .download-title {
+        color: #0f172a;
+        font-size: 15px;
+        font-weight: 900;
+        margin-bottom: 4px;
+    }
+    .download-copy {
+        color: #64748b;
+        font-size: 13px;
+        margin-bottom: 12px;
+    }
     @media (max-width: 900px) {
         .main-title {
             font-size: 26px;
@@ -332,6 +633,34 @@ st.markdown(
         }
         .metric-strip {
             grid-template-columns: 1fr;
+        }
+        .report-grid,
+        .acceptance-grid,
+        .status-strip,
+        .bento-grid {
+            grid-template-columns: 1fr;
+        }
+        .taste-nav {
+            border-radius: 12px;
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .taste-nav-links {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+        .taste-hero {
+            min-height: 360px;
+            padding: 42px 20px 28px;
+        }
+        .taste-hero-title {
+            font-size: 38px;
+        }
+        .bento-large,
+        .bento-wide {
+            grid-column: span 1;
+            grid-row: span 1;
+            min-height: 190px;
         }
     }
     </style>
@@ -476,6 +805,121 @@ def build_llm_context(data: pd.DataFrame, sample_rows: int) -> str:
     return json.dumps(summary, ensure_ascii=False, indent=2)
 
 
+def build_report_tables(data: pd.DataFrame, mode: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """构造页面、Word 和 Excel 复用的结构化报告表格。"""
+    bom = estimate_bom(data)
+    site_types = join_unique(data, "站点类型") or "未识别"
+    aau_models = join_unique(data, "AAU型号") or "未识别"
+    bbu_models = join_unique(data, "BBU型号") or "未识别"
+    power_sources = join_unique(data, "取电方式") or "未识别"
+    avg_cable = round(bom["cable_total"] / bom["site_count"], 1) if bom["site_count"] else 0
+    terminal_lugs = bom["site_count"] * 10
+    firestop_kits = bom["site_count"] * 4
+    cable_ties = max(100, bom["cable_total"] * 2)
+
+    overview_table = pd.DataFrame(
+        [
+            ["生成模式", mode],
+            ["站点数量", f"{bom['site_count']} 个"],
+            ["站点类型", site_types],
+            ["AAU 型号", aau_models],
+            ["BBU 型号", bbu_models],
+            ["取电方式", power_sources],
+            ["线缆路由", f"合计约 {bom['cable_total']} 米，平均约 {avg_cable} 米/站"],
+            ["交付范围", "AAU/BBU 安装、前传光缆、电源接入、接地、防水封堵、基础联调"],
+            ["风险重点", "电力交越安全净距、高处作业、防水封堵、隔离保护、接地闭环"],
+        ],
+        columns=["项目", "结论"],
+    )
+
+    bom_table = pd.DataFrame(
+        [
+            ["室外电源线", "RVVZ 3x6mm²", bom["power_cable"], "米", "AAU/BBU 供电接入"],
+            ["室外光缆", "GYTA-12B1", bom["optical_cable"], "米", "BBU 至 AAU 前传链路"],
+            ["保护接地线", "BVR 16mm² 黄绿双色", bom["grounding_cable"], "米", "机柜、抱杆、AAU 接地"],
+            ["线缆标识牌", "防水阻燃型", bom["labels"], "个", "电源线、光缆、尾纤双端标识"],
+            ["镀锌桥架/线槽", "100x50mm", bom["cable_tray"], "米", "楼面及弱电井线缆保护"],
+            ["防水胶泥与热缩套管", "室外耐候型", bom["waterproof_kits"], "套", "馈线窗、穿墙孔洞封堵"],
+            ["铜鼻子/冷压端子", "与电源线线径匹配", terminal_lugs, "个", "电源线端接压接"],
+            ["防火封堵材料", "阻燃泥/防火包", firestop_kits, "套", "竖井、穿墙、机房孔洞封堵"],
+            ["尼龙扎带/不锈钢扎带", "室外耐候型", cable_ties, "根", "线缆绑扎与路由整理"],
+        ],
+        columns=["物料名称", "推荐规格", "估算数量", "单位", "施工用途"],
+    )
+
+    acceptance_table = pd.DataFrame(
+        [
+            ["设备安装", "设备位置、朝向、挂高、紧固、防水、铭牌照片齐全。"],
+            ["线缆工艺", "路由整齐、绑扎间距一致、转弯半径合规、标签双端一致。"],
+            ["电源接入", "空开容量、输入电压、端子压接、线缆颜色和极性复核通过。"],
+            ["接地系统", "接地线规格、接地点防腐、接地电阻测试记录齐全。"],
+            ["光链路", "收发光功率、端口对应关系、链路状态截图齐全。"],
+            ["资料闭环", "竣工图、变更记录、测试记录、隐蔽工程照片和整改记录归档。"],
+        ],
+        columns=["验收项", "交付要求"],
+    )
+
+    return overview_table, bom_table, acceptance_table
+
+
+def markdown_to_html_fragment(markdown_text: str) -> str:
+    """把生成报告中的常见 Markdown 表格/段落转成 Word 可识别的 HTML。"""
+    lines = markdown_text.splitlines()
+    fragments = []
+    index = 0
+    in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            fragments.append("</ul>")
+            in_list = False
+
+    while index < len(lines):
+        line = lines[index].strip()
+        if not line:
+            close_list()
+            index += 1
+            continue
+
+        if line.startswith("|") and line.endswith("|"):
+            close_list()
+            table_rows = []
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                current = lines[index].strip()
+                cells = [html.escape(cell.strip()) for cell in current.strip("|").split("|")]
+                if not all(cell.replace("-", "").replace(":", "").strip() == "" for cell in cells):
+                    table_rows.append(cells)
+                index += 1
+            if table_rows:
+                header = table_rows[0]
+                body_rows = table_rows[1:]
+                fragments.append("<table><thead><tr>" + "".join(f"<th>{cell}</th>" for cell in header) + "</tr></thead><tbody>")
+                for row in body_rows:
+                    fragments.append("<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>")
+                fragments.append("</tbody></table>")
+            continue
+
+        close_list()
+        if line.startswith("### "):
+            fragments.append(f"<h3>{html.escape(line[4:])}</h3>")
+        elif line.startswith("## "):
+            fragments.append(f"<h2>{html.escape(line[3:])}</h2>")
+        elif line.startswith("- "):
+            in_list = True
+            fragments.append("<ul>")
+            while index < len(lines) and lines[index].strip().startswith("- "):
+                fragments.append(f"<li>{html.escape(lines[index].strip()[2:])}</li>")
+                index += 1
+            continue
+        else:
+            fragments.append(f"<p>{html.escape(line)}</p>")
+        index += 1
+
+    close_list()
+    return "\n".join(fragments)
+
+
 # =============================
 # 报告导出：生成 Word 可打开的 HTML 文档
 # =============================
@@ -484,8 +928,12 @@ def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
     生成可下载的 .doc 文件内容。
     为保持 Demo 极简，不引入 python-docx；Word/WPS 可直接打开 HTML 格式的 .doc 文件。
     """
+    overview_table, bom_table, acceptance_table = build_report_tables(data, mode)
     preview_table = data.head(5).to_html(index=False, escape=True, border=0)
-    escaped_report = html.escape(report_text)
+    overview_html = overview_table.to_html(index=False, escape=True, border=0)
+    bom_html = bom_table.to_html(index=False, escape=True, border=0)
+    acceptance_html = acceptance_table.to_html(index=False, escape=True, border=0)
+    report_html = markdown_to_html_fragment(report_text)
 
     document = f"""
 <!doctype html>
@@ -500,9 +948,17 @@ def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
             line-height: 1.6;
         }}
         h1 {{
-            font-size: 22px;
-            border-bottom: 2px solid #16a34a;
+            font-size: 24px;
+            border-bottom: 2px solid #0f766e;
             padding-bottom: 8px;
+        }}
+        h2 {{
+            font-size: 18px;
+            margin-top: 22px;
+        }}
+        h3 {{
+            font-size: 15px;
+            margin-top: 18px;
         }}
         .meta {{
             color: #4b5563;
@@ -514,16 +970,15 @@ def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
             margin: 10px 0 18px;
         }}
         th, td {{
-            border: 1px solid #d1d5db;
-            padding: 6px 8px;
+            border: 1px solid #cbd5e1;
+            padding: 7px 9px;
             font-size: 12px;
         }}
         th {{
-            background: #f3f4f6;
+            background: #f1f5f9;
+            color: #0f172a;
         }}
-        pre {{
-            white-space: pre-wrap;
-            font-family: "Microsoft YaHei", Arial, sans-serif;
+        p, li {{
             font-size: 13px;
         }}
     </style>
@@ -531,19 +986,46 @@ def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
 <body>
     <h1>5G通信基建数智化交付报告</h1>
     <div class="meta">生成模式：{html.escape(mode)} | 数据记录数：{len(data)}</div>
+    <h2>工程概况</h2>
+    {overview_html}
+    <h2>BOM 物料统计清单</h2>
+    {bom_html}
+    <h2>质量验收与交付资料</h2>
+    {acceptance_html}
     <h2>原始数据预览</h2>
     {preview_table}
-    <h2>智能转化结果</h2>
-    <pre>{escaped_report}</pre>
+    <h2>完整智能转化结果</h2>
+    {report_html}
 </body>
 </html>
 """
     return document.encode("utf-8")
 
 
+def build_excel_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
+    """生成可下载的 Excel 交付工作簿。"""
+    overview_table, bom_table, acceptance_table = build_report_tables(data, mode)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        overview_table.to_excel(writer, sheet_name="工程概况", index=False)
+        bom_table.to_excel(writer, sheet_name="BOM物料清单", index=False)
+        acceptance_table.to_excel(writer, sheet_name="质量验收", index=False)
+        data.to_excel(writer, sheet_name="原始设计数据", index=False)
+        pd.DataFrame({"报告正文": report_text.splitlines()}).to_excel(writer, sheet_name="完整报告", index=False)
+
+        for worksheet in writer.book.worksheets:
+            worksheet.freeze_panes = "A2"
+            for column_cells in worksheet.columns:
+                max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                worksheet.column_dimensions[column_cells[0].column_letter].width = min(max(max_length + 3, 12), 42)
+
+    output.seek(0)
+    return output.getvalue()
+
+
 def show_download_toast() -> None:
     """下载按钮点击后的轻量反馈。"""
-    st.toast("下载成功", icon="✅")
+    st.toast("下载成功")
 
 
 def render_phase(placeholder, percent: int, title: str, detail: str) -> None:
@@ -560,6 +1042,69 @@ def render_phase(placeholder, percent: int, title: str, detail: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_report_dashboard(data: pd.DataFrame, mode: str, report_text: str) -> None:
+    """按 Taste Skill 的 dashboards 风格渲染结构化报告预览。"""
+    bom = estimate_bom(data)
+    overview_table, bom_table, acceptance_table = build_report_tables(data, mode)
+    site_types = join_unique(data, "站点类型") or "未识别"
+    aau_models = join_unique(data, "AAU型号") or "未识别"
+    bbu_models = join_unique(data, "BBU型号") or "未识别"
+    power_sources = join_unique(data, "取电方式") or "未识别"
+    avg_cable = round(bom["cable_total"] / bom["site_count"], 1) if bom["site_count"] else 0
+    acceptance_items = list(acceptance_table.itertuples(index=False, name=None))
+
+    overview_tab, bom_tab, acceptance_tab, full_tab = st.tabs(["工程概况", "BOM", "质量验收", "完整报告"])
+
+    with overview_tab:
+        st.caption("工程概况总览")
+        metric_cols = st.columns(3)
+        metric_cols[0].metric("站点数量", f"{bom['site_count']} 个", site_types)
+        metric_cols[1].metric("线缆路由", f"{bom['cable_total']} m", f"平均 {avg_cable} m/站")
+        metric_cols[2].metric("生成模式", mode, "与左侧控制台同步")
+
+        detail_cols = st.columns(3)
+        with detail_cols[0]:
+            with st.container(border=True):
+                st.markdown("**设备型号**")
+                st.write(f"AAU：{aau_models}")
+                st.write(f"BBU：{bbu_models}")
+        with detail_cols[1]:
+            with st.container(border=True):
+                st.markdown("**取电方式**")
+                st.write(power_sources)
+                st.caption("重点复核空开容量、产权边界和接地条件。")
+        with detail_cols[2]:
+            with st.container(border=True):
+                st.markdown("**风险重点**")
+                st.write("电力交越、高处作业、防水封堵、隔离保护、接地闭环。")
+
+        st.info("规则引擎以全量设计表为计算口径，工程概况直接来自当前上传数据或内置模拟数据。")
+        st.dataframe(overview_table, use_container_width=True, hide_index=True)
+
+    with bom_tab:
+        st.caption("BOM 物料估算")
+        bom_kpis = st.columns(4)
+        bom_kpis[0].metric("电源线", f"{bom['power_cable']} m")
+        bom_kpis[1].metric("光缆", f"{bom['optical_cable']} m")
+        bom_kpis[2].metric("标签", f"{bom['labels']} 个")
+        bom_kpis[3].metric("防水套件", f"{bom['waterproof_kits']} 套")
+        st.dataframe(bom_table, use_container_width=True, hide_index=True)
+        st.caption("BOM 为 Demo 经验规则估算，用于演示物料核对流程，不作为真实采购依据。")
+
+    with acceptance_tab:
+        st.caption("质量验收清单")
+        left_col, right_col = st.columns(2)
+        for index, (title, copy) in enumerate(acceptance_items):
+            target_col = left_col if index % 2 == 0 else right_col
+            with target_col:
+                with st.container(border=True):
+                    st.markdown(f"**{title}**")
+                    st.write(copy)
+
+    with full_tab:
+        st.markdown(report_text)
 
 
 # =============================
@@ -769,34 +1314,36 @@ with st.sidebar:
         """
         <div class="sidebar-brand">
             <div class="brand-mark">5G</div>
-            <div class="brand-title">Delivery Intelligence</div>
-            <div class="brand-sub">BOM automation · Work order drafting</div>
+            <div class="brand-title">云筑交付中枢</div>
+            <div class="brand-sub">设计表 · BOM · 交付文档</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.caption("控制台")
+    st.caption("可折叠控制台")
 
-    uploaded_file = st.file_uploader(
-        "上传基站设计元数据表",
-        type=["xlsx", "csv"],
-        help="支持前序设计软件导出的 Excel 或 CSV 结构化表格。",
-    )
+    with st.expander("数据接入", expanded=True):
+        uploaded_file = st.file_uploader(
+            "上传基站设计元数据表",
+            type=["xlsx", "csv"],
+            help="支持前序设计软件导出的 Excel 或 CSV 结构化表格。",
+        )
+        st.caption("未上传时使用内置 5 行演示数据。")
 
-    mode = st.selectbox(
-        "生成模式",
-        ["生成BOM清单", "生成工艺指导书", "全量生成"],
-        index=2,
-    )
+    with st.expander("生成设置", expanded=True):
+        mode = st.selectbox(
+            "生成模式",
+            ["生成BOM清单", "生成工艺指导书", "全量生成"],
+            index=2,
+        )
+        llm_engine = st.selectbox(
+            "AI 引擎",
+            ["本地Mock（无需密钥）", "真实大模型API（OpenAI兼容）"],
+        )
 
-    llm_engine = st.selectbox(
-        "AI引擎",
-        ["本地Mock（无需密钥）", "真实大模型API（OpenAI兼容）"],
-    )
-
-    with st.expander("真实API配置", expanded=False):
+    with st.expander("真实 API 配置", expanded=False):
         api_url = st.text_input(
-            "API地址",
+            "API 地址",
             value=os.getenv("LLM_API_URL", "https://api.openai.com/v1/chat/completions"),
             help="填写兼容 Chat Completions 的接口地址。",
         )
@@ -811,7 +1358,7 @@ with st.sidebar:
             type="password",
         )
         api_timeout = st.number_input(
-            "API超时时间（秒）",
+            "API 超时时间（秒）",
             min_value=30,
             max_value=600,
             value=int(os.getenv("LLM_TIMEOUT", DEFAULT_API_TIMEOUT)),
@@ -827,16 +1374,17 @@ with st.sidebar:
             help="系统会把全量数据压缩为工程摘要，只附带少量样本行给模型参考。",
         )
         fallback_to_mock = st.checkbox(
-            "API失败时自动生成本地工程报告",
+            "API 失败时自动生成本地工程报告",
             value=True,
             help="开启后，API 超时或网络异常时不会中断流程，会自动使用规则引擎生成交付报告。",
         )
 
-    start_button = st.button(
-        "启动数智化指令转化",
-        type="primary",
-        use_container_width=True,
-    )
+    with st.expander("执行", expanded=True):
+        start_button = st.button(
+            "启动数智化指令转化",
+            type="primary",
+            use_container_width=True,
+        )
 
 
 try:
@@ -851,52 +1399,84 @@ data_source_label = uploaded_file.name if uploaded_file else "系统内置模拟
 
 
 # =============================
-# 主区域：标题与状态总览
+# 主区域：导航、Hero 与工作台入口
 # =============================
 st.markdown(
     f"""
-    <div class="hero-shell">
-        <div class="hero-topline">
-            <div>
-                <div class="hero-badge">Demo 交付工作台</div>
-                <div class="main-title">5G通信基建数智化交付系统</div>
-                <div class="sub-title">
-                    读取设计元数据表，完成字段校验、规则引擎估算、AI 报告生成和 Word 交付文件导出。
-                </div>
-            </div>
-            <div class="hero-chip-row">
-                <span class="hero-chip">数据源：{html.escape(data_source_label)}</span>
-                <span class="hero-chip">模式：{html.escape(mode)}</span>
-                <span class="hero-chip">引擎：{html.escape(llm_engine)}</span>
-            </div>
+    <div class="taste-nav">
+        <div class="taste-nav-brand">云筑交付中枢</div>
+        <div class="taste-nav-links">
+            <span>设计接入</span>
+            <span>规则估算</span>
+            <span>智能成稿</span>
+            <span>交付导出</span>
         </div>
-        <div class="workflow-row">
-            <div class="workflow-step">
-                <div class="workflow-kicker">01 Intake</div>
-                <div class="workflow-title">读取设计元数据</div>
+    </div>
+    <section class="taste-hero">
+        <div class="taste-hero-inner">
+            <div class="product-lockup">
+                <div class="product-lockup-main">云筑交付中枢</div>
+                <div class="product-lockup-line"></div>
             </div>
-            <div class="workflow-step">
-                <div class="workflow-kicker">02 Rules</div>
-                <div class="workflow-title">校验字段与 BOM</div>
-            </div>
-            <div class="workflow-step">
-                <div class="workflow-kicker">03 AI Draft</div>
-                <div class="workflow-title">生成交付指令</div>
-            </div>
-            <div class="workflow-step">
-                <div class="workflow-kicker">04 Export</div>
-                <div class="workflow-title">导出 Word 报告</div>
-            </div>
+            <h1 class="taste-hero-title">把设计元数据转成可交付施工报告</h1>
+            <p class="taste-hero-copy">
+                面向通信基建交付演示：从 Excel/CSV 基站清单进入，经过数据校验、BOM 规则估算、AI 文档生成，最终输出可下载的 Word 交付文件。
+            </p>
+        </div>
+    </section>
+    <div class="status-strip">
+        <div class="status-cell"><span>数据来源</span><strong>{html.escape(data_source_label)}</strong></div>
+        <div class="status-cell"><span>生成模式</span><strong>{html.escape(mode)}</strong></div>
+        <div class="status-cell"><span>智能引擎</span><strong>{html.escape(llm_engine)}</strong></div>
+    </div>
+    <div class="bento-grid">
+        <div class="bento-card bento-large bento-dark">
+            <div class="bento-kicker">交付流水线</div>
+            <div class="bento-title">结构化设计表进入统一交付流水线</div>
+            <div class="bento-copy">上传 Excel 或 CSV 后，系统立即校验必填字段、路由长度和站点记录，为后续 BOM 与施工文档生成建立可信输入。</div>
+        </div>
+        <div class="bento-card">
+            <div class="bento-kicker">规则引擎</div>
+            <div class="bento-title">BOM 估算</div>
+            <div class="bento-copy">电源线、光缆、接地、标签、防水套件按全量数据估算。</div>
+            <div class="bento-number">01</div>
+        </div>
+        <div class="bento-card">
+            <div class="bento-kicker">质量门禁</div>
+            <div class="bento-title">数据校验</div>
+            <div class="bento-copy">缺列、异常距离、空站点编号以清晰状态反馈给操作员。</div>
+            <div class="bento-number">02</div>
+        </div>
+        <div class="bento-card bento-wide">
+            <div class="bento-kicker">智能成稿</div>
+            <div class="bento-title">摘要化上下文，避免整表直塞模型</div>
+            <div class="bento-copy">大型文件先压缩为工程摘要和样本行，再调用 OpenAI 兼容接口，超时可回退本地规则报告。</div>
+            <div class="bento-number">03</div>
         </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
+st.markdown('<div class="hero-action-row"></div>', unsafe_allow_html=True)
+hero_col_a, hero_col_b = st.columns([1, 1], gap="medium")
+with hero_col_a:
+    view_workbench_button = st.button("查看工程工作台", use_container_width=True)
+with hero_col_b:
+    hero_generate_button = st.button("生成交付报告", type="primary", use_container_width=True)
+
+if view_workbench_button:
+    st.session_state.show_workbench_hint = True
+    st.toast("已定位到工程工作台")
+
 
 # =============================
 # 主区域上方：原始数据透视与校验
 # =============================
+st.markdown('<div id="workbench"></div>', unsafe_allow_html=True)
+if st.session_state.get("show_workbench_hint"):
+    st.info("工程工作台已展开：可在下方查看数据预览、质量校验、规则指标和智能转换结果。")
+
 preview_col, quality_col = st.columns([1.65, 1], gap="large")
 
 with preview_col:
@@ -985,7 +1565,7 @@ st.markdown(
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = ""
 
-if start_button:
+if start_button or hero_generate_button:
     if validation_errors:
         st.error("当前数据缺少必填字段，请修正后再启动转化。")
         st.stop()
@@ -1071,28 +1651,52 @@ if start_button:
     st.success("数智化指令转化完成")
 
 if st.session_state.ai_result:
-    # 使用 Streamlit 原生边框容器作为结果卡片，避免自定义 HTML 影响 markdown 表格渲染。
-    with st.container(border=True):
-        st.markdown(st.session_state.ai_result)
+    st.markdown('<div class="result-stage">', unsafe_allow_html=True)
+    render_report_dashboard(work_df, mode, st.session_state.ai_result)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     report_bytes = build_word_report(st.session_state.ai_result, work_df, mode)
-    st.download_button(
-        "一键下载转化报告 (Word)",
-        data=report_bytes,
-        file_name="5G通信基建数智化交付报告.doc",
-        mime="application/msword",
-        use_container_width=True,
-        on_click=show_download_toast,
-    )
-else:
+    excel_bytes = build_excel_report(st.session_state.ai_result, work_df, mode)
     st.markdown(
         """
-        <div class="report-hint">
-            等待任务启动：请在左侧选择生成模式与 AI 引擎，然后点击“启动数智化指令转化”。
+        <div class="download-band">
+            <div class="download-title">交付文件下载</div>
+            <div class="download-copy">Word 用于施工交底与归档，Excel 用于物料复核、数据流转和二次编辑。</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    download_col_a, download_col_b = st.columns(2)
+    with download_col_a:
+        st.download_button(
+            "下载 Word 交付报告",
+            data=report_bytes,
+            file_name="5G通信基建数智化交付报告.doc",
+            mime="application/msword",
+            use_container_width=True,
+            on_click=show_download_toast,
+        )
+    with download_col_b:
+        st.download_button(
+            "下载 Excel 交付清单",
+            data=excel_bytes,
+            file_name="5G通信基建数智化交付清单.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            on_click=show_download_toast,
+        )
+else:
+    st.markdown(
+        """
+        <div class="report-hint">
+            当前展示的是基于现有数据的演示预览。点击左侧“启动数智化指令转化”后，会生成正式报告正文并开放 Word 下载。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="result-stage">', unsafe_allow_html=True)
+    render_report_dashboard(work_df, mode, mock_llm_response(work_df, mode))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =============================
