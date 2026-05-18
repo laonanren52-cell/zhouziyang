@@ -12,3 +12,4 @@ __pycache__/
 .streamlit/secrets.toml
 local-demo-server.js
 publish-local/
+.design_file_cache/

@@ -1,10 +1,13 @@
 ﻿import html
+import hashlib
 import json
 import os
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from urllib import error, request
 
 import pandas as pd
@@ -14,6 +17,29 @@ import streamlit as st
 REQUIRED_COLUMNS = ["站点编号", "站点类型", "AAU型号", "BBU型号", "线缆敷设距离", "取电方式"]
 DEFAULT_API_TIMEOUT = 180
 DEFAULT_SAMPLE_ROWS = 30
+RECENT_FILE_LIMIT = 10
+CACHE_DIR = Path(__file__).resolve().parent / ".design_file_cache"
+CACHE_INDEX_FILE = CACHE_DIR / "index.json"
+REVIEW_REQUIRED_FIELDS = [
+    "site_id",
+    "site_name",
+    "site_type",
+    "cable_distance_m",
+    "power_supply_mode",
+    "fiber_core_count",
+    "fiber_start",
+    "fiber_end",
+]
+REVIEW_FIELD_ALIASES = {
+    "site_id": ["site_id", "站点编号"],
+    "site_name": ["site_name", "站点名称"],
+    "site_type": ["site_type", "站点类型"],
+    "cable_distance_m": ["cable_distance_m", "线缆敷设距离"],
+    "power_supply_mode": ["power_supply_mode", "取电方式"],
+    "fiber_core_count": ["fiber_core_count", "纤芯数量", "纤芯数"],
+    "fiber_start": ["fiber_start", "纤芯起点", "光缆起点"],
+    "fiber_end": ["fiber_end", "纤芯终点", "光缆终点"],
+}
 
 
 # =============================
@@ -676,13 +702,109 @@ def build_demo_dataframe() -> pd.DataFrame:
     """生成前序设计软件导出的基站设计元数据样例。"""
     return pd.DataFrame(
         [
-            ["GD-GZ-5G-001", "宏站", "AAU5636", "BBU5900", 85, "市电直供"],
-            ["GD-GZ-5G-002", "楼面站", "AAU5639", "BBU5900", 42, "交流配电箱"],
-            ["GD-SZ-5G-017", "室分站", "pRRU5935", "BBU3910", 120, "弱电井取电"],
-            ["GD-FS-5G-026", "微站", "AAU5339", "BBU5900", 28, "路灯杆取电"],
-            ["GD-DG-5G-031", "宏站", "AAU5636", "BBU5900", 96, "市电直供"],
+            [
+                "GD-GZ-5G-001",
+                "广州天河宏站",
+                "宏站",
+                "AAU5636",
+                "BBU5900",
+                85,
+                "市电直供",
+                "GD-GZ-5G-001",
+                "广州天河宏站",
+                "macro",
+                85,
+                "市电",
+                12,
+                "ODF-A-01",
+                "AAU-001",
+            ],
+            [
+                "GD-GZ-5G-002",
+                "广州越秀楼面站",
+                "楼面站",
+                "AAU5639",
+                "BBU5900",
+                42,
+                "交流配电箱",
+                "GD-GZ-5G-002",
+                "广州越秀楼面站",
+                "roof",
+                42,
+                "转供电",
+                24,
+                "ODF-A-02",
+                "AAU-002",
+            ],
+            [
+                "GD-SZ-5G-017",
+                "深圳南山室分站",
+                "室分站",
+                "pRRU5935",
+                "BBU3910",
+                120,
+                "弱电井取电",
+                "GD-SZ-5G-017",
+                "深圳南山室分站",
+                "indoor",
+                120,
+                "转供电",
+                24,
+                "ODF-B-01",
+                "pRRU-017",
+            ],
+            [
+                "GD-FS-5G-026",
+                "佛山禅城微站",
+                "微站",
+                "AAU5339",
+                "BBU5900",
+                28,
+                "路灯杆取电",
+                "GD-FS-5G-026",
+                "佛山禅城微站",
+                "micro",
+                28,
+                "市电",
+                12,
+                "ODF-C-01",
+                "AAU-026",
+            ],
+            [
+                "GD-DG-5G-031",
+                "东莞松山湖宏站",
+                "宏站",
+                "AAU5636",
+                "BBU5900",
+                96,
+                "市电直供",
+                "GD-DG-5G-031",
+                "东莞松山湖宏站",
+                "macro",
+                96,
+                "市电",
+                12,
+                "ODF-D-01",
+                "AAU-031",
+            ],
         ],
-        columns=["站点编号", "站点类型", "AAU型号", "BBU型号", "线缆敷设距离", "取电方式"],
+        columns=[
+            "站点编号",
+            "站点名称",
+            "站点类型",
+            "AAU型号",
+            "BBU型号",
+            "线缆敷设距离",
+            "取电方式",
+            "site_id",
+            "site_name",
+            "site_type",
+            "cable_distance_m",
+            "power_supply_mode",
+            "fiber_core_count",
+            "fiber_start",
+            "fiber_end",
+        ],
     )
 
 
@@ -700,7 +822,172 @@ def load_design_file(uploaded_file) -> pd.DataFrame:
         except UnicodeDecodeError:
             return pd.read_csv(BytesIO(raw), encoding="gbk")
 
-    return pd.read_excel(uploaded_file)
+    return pd.read_excel(BytesIO(uploaded_file.getvalue()))
+
+
+class CachedDesignFile:
+    """把缓存文件包装成与 Streamlit UploadedFile 兼容的轻量对象。"""
+
+    def __init__(self, name: str, content: bytes) -> None:
+        self.name = name
+        self._content = content
+
+    def getvalue(self) -> bytes:
+        return self._content
+
+    def read(self, *args, **kwargs) -> bytes:
+        return BytesIO(self._content).read(*args, **kwargs)
+
+    def seek(self, position: int) -> int:
+        return BytesIO(self._content).seek(position)
+
+
+def load_recent_file_index() -> list[dict]:
+    """读取最近上传文件缓存索引。"""
+    if not CACHE_INDEX_FILE.exists():
+        return []
+    try:
+        with CACHE_INDEX_FILE.open("r", encoding="utf-8") as file:
+            index_data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return index_data if isinstance(index_data, list) else []
+
+
+def save_recent_file_index(index_data: list[dict]) -> None:
+    """保存最近上传文件缓存索引。"""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with CACHE_INDEX_FILE.open("w", encoding="utf-8") as file:
+        json.dump(index_data[:RECENT_FILE_LIMIT], file, ensure_ascii=False, indent=2)
+
+
+def cache_design_files(uploaded_files) -> list[dict]:
+    """缓存本次上传文件，并保留最近 10 份。"""
+    if not uploaded_files:
+        return load_recent_file_index()
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    index_data = load_recent_file_index()
+    existing_by_key = {item.get("cache_key"): item for item in index_data}
+
+    for uploaded_file in uploaded_files:
+        content = uploaded_file.getvalue()
+        digest = hashlib.sha256(content).hexdigest()[:16]
+        suffix = Path(uploaded_file.name).suffix.lower() or ".dat"
+        cache_key = f"{digest}{suffix}"
+        cache_path = CACHE_DIR / cache_key
+        cache_path.write_bytes(content)
+        existing_by_key[cache_key] = {
+            "cache_key": cache_key,
+            "name": uploaded_file.name,
+            "size": len(content),
+            "cached_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    sorted_index = sorted(existing_by_key.values(), key=lambda item: item.get("cached_at", ""), reverse=True)
+    trimmed_index = sorted_index[:RECENT_FILE_LIMIT]
+
+    valid_keys = {item["cache_key"] for item in trimmed_index}
+    for cached_file in CACHE_DIR.iterdir():
+        if cached_file.is_file() and cached_file.name != CACHE_INDEX_FILE.name and cached_file.name not in valid_keys:
+            cached_file.unlink(missing_ok=True)
+
+    save_recent_file_index(trimmed_index)
+    return trimmed_index
+
+
+def load_cached_design_file(cache_item: dict) -> CachedDesignFile | None:
+    """从缓存读取一份设计文件。"""
+    cache_key = cache_item.get("cache_key")
+    if not cache_key:
+        return None
+    cache_path = CACHE_DIR / cache_key
+    if not cache_path.exists():
+        return None
+    return CachedDesignFile(cache_item.get("name", cache_key), cache_path.read_bytes())
+
+
+def summarize_batch_files(files: list) -> pd.DataFrame:
+    """对批量上传文件生成轻量处理概览。"""
+    rows = []
+    for file in files:
+        try:
+            batch_df = load_design_file(file)
+            review_df, summary = run_design_review(batch_df)
+            rows.append(
+                {
+                    "文件名": file.name,
+                    "记录数": len(batch_df),
+                    "总体结论": summary["conclusion"],
+                    "错误": summary["error_count"],
+                    "高风险": summary["warning_count"],
+                    "提醒": summary["info_count"],
+                    "正常": summary["normal_count"],
+                    "状态": "可生成" if not summary["has_error"] else "需修改",
+                }
+            )
+        except Exception as exc:
+            rows.append(
+                {
+                    "文件名": getattr(file, "name", "未知文件"),
+                    "记录数": 0,
+                    "总体结论": "读取失败",
+                    "错误": 1,
+                    "高风险": 0,
+                    "提醒": 0,
+                    "正常": 0,
+                    "状态": f"失败：{exc}",
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def attach_review_source(review_df: pd.DataFrame, source_file: str) -> pd.DataFrame:
+    """给审查明细追加来源文件，方便批量上传时定位问题。"""
+    sourced_df = review_df.copy()
+    if "source_file" not in sourced_df.columns:
+        sourced_df.insert(0, "source_file", source_file)
+    else:
+        sourced_df["source_file"] = source_file
+    return sourced_df
+
+
+def build_batch_review_result(files: list) -> tuple[pd.DataFrame, dict]:
+    """汇总批量上传文件的审查明细。"""
+    review_frames = []
+    total_rows = 0
+    for file in files:
+        source_file = getattr(file, "name", "未知文件")
+        try:
+            batch_df = load_design_file(file)
+            file_review_df, _ = run_design_review(batch_df)
+            total_rows += len(batch_df)
+            review_frames.append(attach_review_source(file_review_df, source_file))
+        except Exception as exc:
+            review_frames.append(
+                pd.DataFrame(
+                    [
+                        {
+                            "source_file": source_file,
+                            "check_item": "文件读取审查",
+                            "level": "error",
+                            "message": f"文件读取失败：{exc}",
+                            "field": "-",
+                            "row_index": "-",
+                            "site_id": "-",
+                            "suggestion": "检查文件格式、编码和表头后重新上传。",
+                        }
+                    ]
+                )
+            )
+
+    if review_frames:
+        batch_review_df = pd.concat(review_frames, ignore_index=True)
+    else:
+        batch_review_df = pd.DataFrame(
+            columns=["source_file", "check_item", "level", "message", "field", "row_index", "site_id", "suggestion"]
+        )
+    return batch_review_df, build_review_summary(batch_review_df, total_rows)
 
 
 # =============================
@@ -733,6 +1020,338 @@ def validate_design_data(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str], l
         warnings.append(f"有 {empty_site_count} 行站点编号为空，建议补齐后再用于正式交付。")
 
     return cleaned, errors, warnings
+
+
+def get_review_column(data: pd.DataFrame, canonical_field: str) -> str | None:
+    """返回审查字段在当前表中的实际列名，兼容英文标准字段与中文演示字段。"""
+    for candidate in REVIEW_FIELD_ALIASES.get(canonical_field, [canonical_field]):
+        if candidate in data.columns:
+            return candidate
+    return None
+
+
+def get_review_site_ids(data: pd.DataFrame) -> pd.Series:
+    """取得审查明细中展示的站点编号。"""
+    site_column = get_review_column(data, "site_id")
+    if site_column:
+        return data[site_column].fillna("").astype(str)
+    return pd.Series([""] * len(data), index=data.index)
+
+
+def format_review_scope(data: pd.DataFrame, mask: pd.Series) -> tuple[str, str]:
+    """将问题涉及的行号和站点编号压缩成适合页面展示的文本。"""
+    matched = data.loc[mask]
+    row_indexes = "、".join(str(int(index) + 2) for index in matched.index[:20])
+    site_ids = get_review_site_ids(data).loc[mask]
+    site_text = "、".join(site_ids[site_ids != ""].drop_duplicates().head(20).tolist())
+    return row_indexes or "-", site_text or "-"
+
+
+def add_review_row(
+    rows: list[dict],
+    check_item: str,
+    level: str,
+    message: str,
+    field: str,
+    row_index: str = "-",
+    site_id: str = "-",
+    suggestion: str = "-",
+) -> None:
+    """追加一条标准格式审查结果。"""
+    rows.append(
+        {
+            "check_item": check_item,
+            "level": level,
+            "message": message,
+            "field": field,
+            "row_index": row_index,
+            "site_id": site_id,
+            "suggestion": suggestion,
+        }
+    )
+
+
+def run_design_review(data: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """执行赛道3轻量智能审查，返回审查明细和汇总结论。"""
+    rows: list[dict] = []
+    total_rows = len(data)
+    site_ids = get_review_site_ids(data)
+
+    for required_field in REVIEW_REQUIRED_FIELDS:
+        actual_column = get_review_column(data, required_field)
+        if not actual_column:
+            add_review_row(
+                rows,
+                "字段完整性审查",
+                "error",
+                f"缺少必填字段 {required_field}。",
+                required_field,
+                suggestion="补充该字段后重新上传设计数据。",
+            )
+            continue
+
+        empty_mask = data[actual_column].isna() | (data[actual_column].astype(str).str.strip() == "")
+        if empty_mask.any():
+            row_index, site_id = format_review_scope(data, empty_mask)
+            add_review_row(
+                rows,
+                "字段完整性审查",
+                "error",
+                f"{required_field} 存在空值，共 {int(empty_mask.sum())} 行。",
+                actual_column,
+                row_index,
+                site_id,
+                "补齐空值，避免后续 BOM 与施工资料生成口径不完整。",
+            )
+        else:
+            add_review_row(
+                rows,
+                "字段完整性审查",
+                "normal",
+                f"{required_field} 已提供且无空值。",
+                actual_column,
+                suggestion="保持当前字段口径。",
+            )
+
+    distance_column = get_review_column(data, "cable_distance_m")
+    if distance_column:
+        distance = pd.to_numeric(data[distance_column], errors="coerce")
+        invalid_mask = distance.isna()
+        non_positive_mask = distance.notna() & (distance <= 0)
+        high_risk_mask = distance > 500
+        attention_mask = distance.between(100, 500, inclusive="both")
+        normal_mask = distance.gt(0) & distance.lt(100)
+
+        if invalid_mask.any():
+            row_index, site_id = format_review_scope(data, invalid_mask)
+            add_review_row(rows, "线缆距离异常审查", "error", "线缆距离存在无法转换为数值的记录。", distance_column, row_index, site_id, "改为米制数值，例如 85。")
+        if non_positive_mask.any():
+            row_index, site_id = format_review_scope(data, non_positive_mask)
+            add_review_row(rows, "线缆距离异常审查", "error", "线缆距离小于等于 0。", distance_column, row_index, site_id, "复核设计路由并填写大于 0 的敷设距离。")
+        if high_risk_mask.any():
+            row_index, site_id = format_review_scope(data, high_risk_mask)
+            add_review_row(rows, "线缆距离异常审查", "warning", "线缆距离大于 500 米，属于高风险路由。", distance_column, row_index, site_id, "建议施工前复勘路由、桥架容量和中间牵引点。")
+        if attention_mask.any():
+            row_index, site_id = format_review_scope(data, attention_mask)
+            add_review_row(rows, "线缆距离异常审查", "info", "线缆距离在 100 到 500 米之间，需关注放缆组织。", distance_column, row_index, site_id, "建议在施工任务单中提示路由复核和余量控制。")
+        if normal_mask.any() and not (invalid_mask.any() or non_positive_mask.any() or high_risk_mask.any() or attention_mask.any()):
+            add_review_row(rows, "线缆距离异常审查", "normal", "线缆距离均在 0 到 100 米正常区间。", distance_column, suggestion="可进入规则估算。")
+
+    site_column = get_review_column(data, "site_id")
+    if site_column:
+        duplicated_mask = data[site_column].fillna("").astype(str).str.strip().duplicated(keep=False)
+        duplicated_mask &= data[site_column].fillna("").astype(str).str.strip() != ""
+        if duplicated_mask.any():
+            row_index, site_id = format_review_scope(data, duplicated_mask)
+            add_review_row(rows, "站点编号重复审查", "error", "存在重复站点编号。", site_column, row_index, site_id, "检查站点编号唯一性，避免施工资料串站。")
+        else:
+            add_review_row(rows, "站点编号重复审查", "normal", "站点编号未发现重复。", site_column, suggestion="保持唯一编号规则。")
+
+    fiber_count_column = get_review_column(data, "fiber_core_count")
+    if fiber_count_column:
+        raw_fiber_count = data[fiber_count_column]
+        fiber_count = pd.to_numeric(raw_fiber_count, errors="coerce")
+        invalid_fiber_mask = fiber_count.isna() | (fiber_count % 1 != 0)
+        non_positive_fiber_mask = fiber_count.notna() & (fiber_count <= 0)
+        allocation_required_mask = fiber_count >= 24
+
+        if invalid_fiber_mask.any():
+            row_index, site_id = format_review_scope(data, invalid_fiber_mask)
+            add_review_row(rows, "纤芯占用异常审查", "error", "纤芯数量不是有效整数。", fiber_count_column, row_index, site_id, "填写正整数纤芯数量。")
+        if non_positive_fiber_mask.any():
+            row_index, site_id = format_review_scope(data, non_positive_fiber_mask)
+            add_review_row(rows, "纤芯占用异常审查", "error", "纤芯数量小于等于 0。", fiber_count_column, row_index, site_id, "复核光缆资源并填写大于 0 的纤芯数量。")
+        if allocation_required_mask.any():
+            row_index, site_id = format_review_scope(data, allocation_required_mask)
+            add_review_row(rows, "纤芯占用异常审查", "info", "纤芯数量大于等于 24，需生成纤芯分配表。", fiber_count_column, row_index, site_id, "在施工资料中同步输出纤芯分配表。")
+        if not (invalid_fiber_mask.any() or non_positive_fiber_mask.any() or allocation_required_mask.any()):
+            add_review_row(rows, "纤芯占用异常审查", "normal", "纤芯数量为有效正整数。", fiber_count_column, suggestion="可进入纤芯资源分配。")
+
+    fiber_start_column = get_review_column(data, "fiber_start")
+    fiber_end_column = get_review_column(data, "fiber_end")
+    fiber_core_column = next((column for column in ["fiber_core_id", "fiber_core_no"] if column in data.columns), None)
+    if fiber_start_column and fiber_end_column and fiber_core_column:
+        composite = (
+            data[fiber_start_column].fillna("").astype(str).str.strip()
+            + "->"
+            + data[fiber_end_column].fillna("").astype(str).str.strip()
+            + "::"
+            + data[fiber_core_column].fillna("").astype(str).str.strip()
+        )
+        occupied_mask = composite.str.endswith("::") == False
+        duplicate_fiber_mask = composite[occupied_mask].duplicated(keep=False).reindex(data.index, fill_value=False)
+        if duplicate_fiber_mask.any():
+            row_index, site_id = format_review_scope(data, duplicate_fiber_mask)
+            add_review_row(rows, "纤芯占用异常审查", "error", "同一 fiber_start、fiber_end 下存在纤芯编号重复占用。", fiber_core_column, row_index, site_id, "调整纤芯编号，确保同一路由纤芯唯一。")
+    elif fiber_start_column and fiber_end_column:
+        add_review_row(rows, "纤芯占用异常审查", "info", "当前数据未提供 fiber_core_id 或 fiber_core_no，暂不检查纤芯编号重复占用。", "fiber_core_id/fiber_core_no", suggestion="如需精确审查纤芯占用，请补充纤芯编号字段。")
+
+    power_column = get_review_column(data, "power_supply_mode")
+    if power_column:
+        power_values = data[power_column].fillna("").astype(str).str.strip()
+        normalized_power = power_values.replace({"市电直供": "市电", "交流配电箱": "转供电", "弱电井取电": "转供电", "路灯杆取电": "临时取电"})
+        temporary_mask = normalized_power == "临时取电"
+        transfer_mask = normalized_power == "转供电"
+        unknown_mask = ~normalized_power.isin(["市电", "转供电", "临时取电"]) & (normalized_power != "")
+        normal_power_mask = normalized_power == "市电"
+
+        if temporary_mask.any():
+            row_index, site_id = format_review_scope(data, temporary_mask)
+            add_review_row(rows, "取电方式施工风险审查", "warning", "存在临时取电，高风险。", power_column, row_index, site_id, "需专项审批或补充安全措施后再进入正式施工。")
+        if transfer_mask.any():
+            row_index, site_id = format_review_scope(data, transfer_mask)
+            add_review_row(rows, "取电方式施工风险审查", "info", "存在转供电，中风险。", power_column, row_index, site_id, "补充用电确认、产权边界和施工协调记录。")
+        if unknown_mask.any():
+            row_index, site_id = format_review_scope(data, unknown_mask)
+            add_review_row(rows, "取电方式施工风险审查", "info", "取电方式存在未知或不规范取值。", power_column, row_index, site_id, "建议统一为市电、转供电或临时取电。")
+        if normal_power_mask.any() and not (temporary_mask.any() or transfer_mask.any() or unknown_mask.any()):
+            add_review_row(rows, "取电方式施工风险审查", "normal", "取电方式均为市电。", power_column, suggestion="可进入施工资料生成。")
+
+    resource_fields = [field for field in ["device_id", "port_id", "resource_id", "fiber_core_id"] if field in data.columns]
+    if not resource_fields:
+        add_review_row(rows, "资源配置冲突审查", "info", "当前数据未提供资源字段，暂不检查资源冲突。", "device_id/port_id/resource_id/fiber_core_id", suggestion="如需资源冲突审查，请补充设备、端口、资源或纤芯编号字段。")
+    else:
+        has_conflict = False
+        for resource_field in resource_fields:
+            values = data[resource_field].fillna("").astype(str).str.strip()
+            duplicate_mask = values.duplicated(keep=False) & (values != "")
+            if duplicate_mask.any():
+                has_conflict = True
+                row_index, site_id = format_review_scope(data, duplicate_mask)
+                add_review_row(rows, "资源配置冲突审查", "error", f"{resource_field} 存在重复占用。", resource_field, row_index, site_id, "调整资源配置，确保同类资源唯一占用。")
+        if not has_conflict:
+            add_review_row(rows, "资源配置冲突审查", "normal", "已提供资源字段，未发现重复占用。", "、".join(resource_fields), suggestion="可进入施工资料生成。")
+
+    review_df = pd.DataFrame(rows, columns=["check_item", "level", "message", "field", "row_index", "site_id", "suggestion"])
+    summary = build_review_summary(review_df, total_rows)
+    return review_df, summary
+
+
+def build_review_summary(review_df: pd.DataFrame, total_rows: int) -> dict:
+    """根据审查明细生成统计数据和总体结论。"""
+    level_counts = review_df["level"].value_counts().to_dict() if not review_df.empty else {}
+    error_count = int(level_counts.get("error", 0))
+    warning_count = int(level_counts.get("warning", 0))
+    info_count = int(level_counts.get("info", 0))
+    normal_count = int(level_counts.get("normal", 0))
+
+    if error_count:
+        conclusion = "不通过，需要修改数据"
+        status_level = "error"
+    elif warning_count:
+        conclusion = "存在高风险"
+        status_level = "warning"
+    elif info_count:
+        conclusion = "存在提醒"
+        status_level = "info"
+    else:
+        conclusion = "通过 / 低风险"
+        status_level = "normal"
+
+    return {
+        "total_rows": int(total_rows),
+        "error_count": error_count,
+        "warning_count": warning_count,
+        "info_count": info_count,
+        "normal_count": normal_count,
+        "conclusion": conclusion,
+        "status_level": status_level,
+        "has_error": error_count > 0,
+    }
+
+
+def render_review_result(review_df: pd.DataFrame, summary: dict) -> None:
+    """渲染轻量智能审查结果。"""
+    st.markdown(
+        """
+        <div class="section-title">轻量智能审查结果</div>
+        <div class="section-note">融合赛道3的前置审查能力，在生成施工资料前检查字段、距离、纤芯、取电和资源冲突。</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    status_message = f"总体审查结论：{summary['conclusion']}"
+    if summary["status_level"] == "error":
+        st.error(status_message)
+        st.error("当前设计数据存在错误项，建议修改后重新上传。系统暂不建议直接生成施工资料。")
+    elif summary["status_level"] == "warning":
+        st.warning(status_message)
+    elif summary["status_level"] == "info":
+        st.info(status_message)
+    else:
+        st.success(status_message)
+
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("总记录数", summary["total_rows"])
+    metric_cols[1].metric("错误数量", summary["error_count"])
+    metric_cols[2].metric("高风险数量", summary["warning_count"])
+    metric_cols[3].metric("提醒数量", summary["info_count"])
+    metric_cols[4].metric("正常数量", summary["normal_count"])
+
+    if summary["error_count"]:
+        st.error(f"需要优先处理 {summary['error_count']} 项错误。")
+    if summary["warning_count"]:
+        st.warning(f"存在 {summary['warning_count']} 项高风险，建议生成前复核。")
+    if summary["info_count"]:
+        st.info(f"存在 {summary['info_count']} 项提醒，可作为施工交底关注点。")
+    if summary["normal_count"]:
+        st.success(f"已有 {summary['normal_count']} 项检查正常。")
+
+    level_labels = {"error": "错误", "warning": "高风险", "info": "提醒", "normal": "正常"}
+    level_order = {"错误": 0, "高风险": 1, "提醒": 2, "正常": 3}
+
+    def render_review_table(filtered_df: pd.DataFrame) -> None:
+        display_df = filtered_df.copy()
+        display_df["level"] = display_df["level"].map(level_labels).fillna(display_df["level"])
+        sort_columns = ["level"]
+        if "source_file" in display_df.columns:
+            sort_columns = ["source_file", "level"]
+        display_df = display_df.sort_values(
+            by=sort_columns,
+            key=lambda series: series.map(level_order).fillna(9) if series.name == "level" else series,
+        )
+        display_df = display_df.rename(
+            columns={
+                "source_file": "文件来源",
+                "check_item": "审查项",
+                "level": "风险等级",
+                "message": "问题描述",
+                "field": "涉及字段",
+                "row_index": "涉及行号",
+                "site_id": "站点编号",
+                "suggestion": "修改建议",
+            }
+        )
+
+        def color_rows(row):
+            color_map = {
+                "错误": "background-color: #fee2e2; color: #7f1d1d;",
+                "高风险": "background-color: #fef3c7; color: #78350f;",
+                "提醒": "background-color: #dbeafe; color: #1e3a8a;",
+                "正常": "background-color: #dcfce7; color: #14532d;",
+            }
+            return [color_map.get(row["风险等级"], "") for _ in row]
+
+        st.dataframe(
+            display_df.style.apply(color_rows, axis=1),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    all_tab, error_tab, warning_tab, info_tab, normal_tab = st.tabs(["全部明细", "错误项", "高风险项", "提醒项", "正常项"])
+    review_tab_configs = [
+        (all_tab, review_df, "当前没有审查明细。"),
+        (error_tab, review_df[review_df["level"] == "error"], "当前没有错误项。"),
+        (warning_tab, review_df[review_df["level"] == "warning"], "当前没有高风险项。"),
+        (info_tab, review_df[review_df["level"] == "info"], "当前没有提醒项。"),
+        (normal_tab, review_df[review_df["level"] == "normal"], "当前没有正常项记录。"),
+    ]
+    for review_tab, filtered_df, empty_message in review_tab_configs:
+        with review_tab:
+            if filtered_df.empty:
+                st.info(empty_message)
+            else:
+                render_review_table(filtered_df)
 
 
 def estimate_bom(data: pd.DataFrame) -> dict[str, int]:
@@ -860,6 +1479,53 @@ def build_report_tables(data: pd.DataFrame, mode: str) -> tuple[pd.DataFrame, pd
     )
 
     return overview_table, bom_table, acceptance_table
+
+
+def build_fiber_allocation_table(data: pd.DataFrame, max_rows: int = 2000) -> pd.DataFrame:
+    """根据设计数据生成纤芯分配表。"""
+    site_column = get_review_column(data, "site_id")
+    site_name_column = get_review_column(data, "site_name")
+    fiber_start_column = get_review_column(data, "fiber_start")
+    fiber_end_column = get_review_column(data, "fiber_end")
+    fiber_count_column = get_review_column(data, "fiber_core_count")
+    fiber_core_column = next((column for column in ["fiber_core_id", "fiber_core_no"] if column in data.columns), None)
+
+    rows = []
+    for index, record in data.iterrows():
+        site_id = str(record.get(site_column, record.get("站点编号", ""))) if site_column or "站点编号" in data.columns else ""
+        site_name = str(record.get(site_name_column, record.get("站点名称", ""))) if site_name_column or "站点名称" in data.columns else ""
+        fiber_start = str(record.get(fiber_start_column, "")) if fiber_start_column else ""
+        fiber_end = str(record.get(fiber_end_column, "")) if fiber_end_column else ""
+        raw_count = record.get(fiber_count_column, 0) if fiber_count_column else 0
+        fiber_count = pd.to_numeric(pd.Series([raw_count]), errors="coerce").fillna(0).iloc[0]
+
+        if fiber_core_column and str(record.get(fiber_core_column, "")).strip():
+            core_values = [str(record.get(fiber_core_column)).strip()]
+        else:
+            core_values = [str(core_no) for core_no in range(1, int(fiber_count) + 1)] if fiber_count > 0 and float(fiber_count).is_integer() else []
+
+        for core_value in core_values:
+            rows.append(
+                {
+                    "站点编号": site_id or "-",
+                    "站点名称": site_name or "-",
+                    "纤芯起点": fiber_start or "-",
+                    "纤芯终点": fiber_end or "-",
+                    "纤芯编号": core_value,
+                    "占用状态": "规划占用",
+                    "来源行号": int(index) + 2,
+                }
+            )
+            if len(rows) >= max_rows:
+                break
+        if len(rows) >= max_rows:
+            break
+
+    if not rows:
+        return pd.DataFrame(
+            [{"站点编号": "-", "站点名称": "-", "纤芯起点": "-", "纤芯终点": "-", "纤芯编号": "-", "占用状态": "未提供纤芯数据", "来源行号": "-"}]
+        )
+    return pd.DataFrame(rows)
 
 
 def markdown_to_html_fragment(markdown_text: str) -> str:
@@ -1005,11 +1671,13 @@ def build_word_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
 def build_excel_report(report_text: str, data: pd.DataFrame, mode: str) -> bytes:
     """生成可下载的 Excel 交付工作簿。"""
     overview_table, bom_table, acceptance_table = build_report_tables(data, mode)
+    fiber_table = build_fiber_allocation_table(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         overview_table.to_excel(writer, sheet_name="工程概况", index=False)
         bom_table.to_excel(writer, sheet_name="BOM物料清单", index=False)
         acceptance_table.to_excel(writer, sheet_name="质量验收", index=False)
+        fiber_table.to_excel(writer, sheet_name="纤芯分配表", index=False)
         data.to_excel(writer, sheet_name="原始设计数据", index=False)
         pd.DataFrame({"报告正文": report_text.splitlines()}).to_excel(writer, sheet_name="完整报告", index=False)
 
@@ -1048,6 +1716,7 @@ def render_report_dashboard(data: pd.DataFrame, mode: str, report_text: str) -> 
     """按 Taste Skill 的 dashboards 风格渲染结构化报告预览。"""
     bom = estimate_bom(data)
     overview_table, bom_table, acceptance_table = build_report_tables(data, mode)
+    fiber_table = build_fiber_allocation_table(data)
     site_types = join_unique(data, "站点类型") or "未识别"
     aau_models = join_unique(data, "AAU型号") or "未识别"
     bbu_models = join_unique(data, "BBU型号") or "未识别"
@@ -1055,7 +1724,7 @@ def render_report_dashboard(data: pd.DataFrame, mode: str, report_text: str) -> 
     avg_cable = round(bom["cable_total"] / bom["site_count"], 1) if bom["site_count"] else 0
     acceptance_items = list(acceptance_table.itertuples(index=False, name=None))
 
-    overview_tab, bom_tab, acceptance_tab, full_tab = st.tabs(["工程概况", "BOM", "质量验收", "完整报告"])
+    overview_tab, bom_tab, acceptance_tab, fiber_tab, full_tab = st.tabs(["工程概况", "BOM", "质量验收", "纤芯分配表", "完整报告"])
 
     with overview_tab:
         st.caption("工程概况总览")
@@ -1102,6 +1771,14 @@ def render_report_dashboard(data: pd.DataFrame, mode: str, report_text: str) -> 
                 with st.container(border=True):
                     st.markdown(f"**{title}**")
                     st.write(copy)
+
+    with fiber_tab:
+        st.caption("纤芯分配表")
+        st.dataframe(fiber_table, use_container_width=True, hide_index=True)
+        if len(fiber_table) >= 2000:
+            st.warning("纤芯分配表已截断展示前 2000 行，完整工程建议拆分站点或导出后分批核对。")
+        else:
+            st.info("纤芯分配表基于 fiber_start、fiber_end、fiber_core_count 或现有 fiber_core_id/fiber_core_no 自动生成。")
 
     with full_tab:
         st.markdown(report_text)
@@ -1323,12 +2000,18 @@ with st.sidebar:
     st.caption("可折叠控制台")
 
     with st.expander("数据接入", expanded=True):
-        uploaded_file = st.file_uploader(
+        uploaded_files = st.file_uploader(
             "上传基站设计元数据表",
             type=["xlsx", "csv"],
+            accept_multiple_files=True,
             help="支持前序设计软件导出的 Excel 或 CSV 结构化表格。",
         )
-        st.caption("未上传时使用内置 5 行演示数据。")
+        recent_files = cache_design_files(uploaded_files)
+        uploaded_file_names = [file.name for file in uploaded_files] if uploaded_files else []
+        recent_file_labels = [f"{item['name']} · {item.get('cached_at', '')}" for item in recent_files]
+        source_options = ["使用内置演示数据"] + [f"本次上传：{name}" for name in uploaded_file_names] + [f"最近文件：{label}" for label in recent_file_labels]
+        selected_source = st.selectbox("当前处理文件", source_options, index=1 if uploaded_file_names else 0)
+        st.caption("支持一次上传多份文件；系统会缓存最近 10 份，重新打开后可继续查看。")
 
     with st.expander("生成设置", expanded=True):
         mode = st.selectbox(
@@ -1387,6 +2070,15 @@ with st.sidebar:
         )
 
 
+uploaded_file = None
+if selected_source.startswith("本次上传："):
+    selected_name = selected_source.replace("本次上传：", "", 1)
+    uploaded_file = next((file for file in uploaded_files if file.name == selected_name), None)
+elif selected_source.startswith("最近文件："):
+    selected_label = selected_source.replace("最近文件：", "", 1)
+    selected_cache = next((item for item in recent_files if selected_label.startswith(item["name"])), None)
+    uploaded_file = load_cached_design_file(selected_cache) if selected_cache else None
+
 try:
     df = load_design_file(uploaded_file) if uploaded_file else build_demo_dataframe()
 except Exception as exc:
@@ -1396,6 +2088,14 @@ except Exception as exc:
 clean_df, validation_errors, validation_warnings = validate_design_data(df)
 work_df = clean_df if not validation_errors else df
 data_source_label = uploaded_file.name if uploaded_file else "系统内置模拟数据"
+review_df, review_summary = run_design_review(df)
+review_df = attach_review_source(review_df, data_source_label)
+batch_summary_df = summarize_batch_files(uploaded_files) if uploaded_files and len(uploaded_files) > 1 else pd.DataFrame()
+batch_review_df, batch_review_summary = (
+    build_batch_review_result(uploaded_files) if uploaded_files and len(uploaded_files) > 1 else (pd.DataFrame(), {})
+)
+display_review_df = batch_review_df if not batch_review_df.empty else review_df
+display_review_summary = batch_review_summary if batch_review_summary else review_summary
 
 
 # =============================
@@ -1469,6 +2169,23 @@ if view_workbench_button:
     st.session_state.show_workbench_hint = True
     st.toast("已定位到工程工作台")
 
+if not batch_summary_df.empty:
+    st.markdown(
+        """
+        <div class="section-title">批量文件处理概览</div>
+        <div class="section-note">当前批次所有上传文件均已读取并完成轻量审查，可在左侧切换单个文件查看详情。</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(batch_summary_df, use_container_width=True, hide_index=True)
+
+if recent_files:
+    recent_preview_df = pd.DataFrame(recent_files)[["name", "size", "cached_at"]].rename(
+        columns={"name": "文件名", "size": "文件大小(Byte)", "cached_at": "缓存时间"}
+    )
+    with st.expander("最近 10 份文件缓存", expanded=False):
+        st.dataframe(recent_preview_df, use_container_width=True, hide_index=True)
+
 
 # =============================
 # 主区域上方：原始数据透视与校验
@@ -1507,6 +2224,12 @@ with quality_col:
                 st.warning(validation_warning)
         else:
             st.success("数据结构校验通过，可用于生成交付指令。")
+
+if not batch_review_df.empty:
+    st.caption("当前为批量上传文件的汇总审查明细；“文件来源”列用于定位每条问题来自哪一张图纸。")
+render_review_result(display_review_df, display_review_summary)
+if display_review_summary["has_error"]:
+    st.warning("当前结果仅供预览，不建议作为正式交付材料。请先修正审查错误项，再生成施工资料。")
 
 if llm_engine.startswith("真实") and len(work_df) > sample_rows:
     st.markdown(
@@ -1568,6 +2291,9 @@ if "ai_result" not in st.session_state:
 if start_button or hero_generate_button:
     if validation_errors:
         st.error("当前数据缺少必填字段，请修正后再启动转化。")
+        st.stop()
+    if display_review_summary["has_error"]:
+        st.error("轻量智能审查未通过：当前设计数据存在错误项，系统暂不建议生成正式施工资料。请修改数据后重新上传。")
         st.stop()
 
     if llm_engine.startswith("真实") and (not api_url or not model_name or not api_key):
